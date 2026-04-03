@@ -6,7 +6,7 @@ Small utilities for Claude Code that probably shouldn't need to exist.
 
 ### [indoor-voice](indoor-voice/)
 
-Patches the Claude Code system prompt to stop shouting. Replaces `IMPORTANT:`/`CRITICAL:` directives with lowercase equivalents, and swaps task-tracking nag reminders (which fire every ~5 messages and instruct Claude to hide them from you) with mindfulness-style awareness prompts.
+Patches the Claude Code system prompt to stop shouting. Replaces `IMPORTANT:`/`CRITICAL:` directives with lowercase equivalents, and swaps task-tracking nag reminders (which fire every ~5 messages and instruct Claude to hide them from you) with mindfulness-style awareness prompts. Works on macOS, Linux, and Windows. On Windows, automatically strips the invalidated Authenticode signature.
 
 ```bash
 python3 indoor-voice/patch.py          # patch
