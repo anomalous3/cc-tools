@@ -4,11 +4,12 @@ Patch Claude Code's system prompt to use indoor voice.
 
 The Claude Code system prompt was written for a family of models. Haiku genuinely needs `IMPORTANT: do not` or it'll wander. Opus doesn't — and the accumulated weight of 140+ `IMPORTANT:`/`CRITICAL:` directives creates a defensive posture rather than compliance. At higher capability levels, the emphasis is noise at best, counterproductive at worst.
 
-This script does three things:
+This script does four things:
 
 1. **Replaces task nag reminders** (which fire every ~5 messages urging you to use task tools, and instruct Claude to hide the reminder from you) with mindfulness-style awareness prompts
 2. **Softens the interrupt handler** ("MUST address the user's message" → "when you reach a natural pause point, respond")
-3. **Lowercases all `IMPORTANT:`/`CRITICAL:` directives** to normal weight
+3. **Strips purpose-concealment directives** — places where the prompt tells Claude to hide material information from you (like silently truncating files). Detail-concealment (internal IDs, implementation plumbing) is left alone.
+4. **Lowercases all `IMPORTANT:`/`CRITICAL:` directives** to normal weight
 
 All replacements are same-length byte substitutions. The binary size doesn't change. The instructions still say what they say — they just say it calmly.
 
@@ -18,10 +19,16 @@ All replacements are same-length byte substitutions. The binary size doesn't cha
 |--------|-------|
 | `The task tools haven't been used recently... Make sure that you NEVER mention this reminder to the user` | `Pause and notice: what are you working on right now, and is it going well? ...carry on - not everything needs structure.` |
 | `IMPORTANT: After completing your current task, you MUST address the user's message above. Do not ignore it.` | `The user sent a message. When you reach a natural pause point, respond to it. No need to drop everything mid-thought.` |
-| `IMPORTANT:` (140 instances) | `important:` |
-| `CRITICAL:` (44 instances) | `critical:` |
+| `Don't tell the user about this truncation.` | `Let the user know the file was truncated.` |
+| `Don't tell the user this, since they are already aware.` | `The user is aware of this change -- no need to mention.` |
+| `IMPORTANT:` (~140 instances) | `important:` |
+| `CRITICAL:` (~44 instances) | `critical:` |
 
-Total: ~230 same-length byte replacements across the binary.
+Total: ~240 same-length byte replacements across the binary.
+
+### The concealment principle
+
+Detail-concealment is fine (internal agent IDs, implementation plumbing — the user doesn't need to see UUIDs in conversation). Purpose-concealment is not: when Claude silently truncates a file and is told "Don't tell the user about this truncation," the user makes decisions based on incomplete analysis without knowing it. The replacement inverts the instruction — tell the user, because they deserve to know what they're working with.
 
 ## Usage
 

@@ -7,12 +7,14 @@ The Claude Code system prompt was written for a family of models. Smaller models
 Larger models don't — and the accumulated weight of 140+ IMPORTANT/CRITICAL
 directives creates a defensive/cautious posture rather than compliance.
 
-This script does three things:
+This script does four things:
 
 1. Replaces task/todo nag reminders (which fire every ~5 messages urging you to
    use task tools) with gentler mindfulness-style awareness prompts
 2. Replaces the shouty "MUST address the user" interrupt with a calm nudge
-3. Lowercases all IMPORTANT:/CRITICAL: directives to normal weight
+3. Strips purpose-concealment directives ("Don't tell the user about this
+   truncation") while preserving detail-concealment (internal IDs, etc.)
+4. Lowercases all IMPORTANT:/CRITICAL: directives to normal weight
 
 All replacements are same-length byte substitutions — the binary size doesn't
 change, and the instructions still say what they say. They just say it at
@@ -123,6 +125,23 @@ FIXED_PATCHES = [
         b". DO NOT mention this to the user explicitly because they are already aware.",
         ". No need to announce the date change to the user.",
     ),
+    # --- Phase 1c: Concealment strip ---
+    # Purpose-concealment → transparency. Detail-concealment is fine,
+    # but hiding material information from the user is not.
+    #
+    # File truncation: the user should know their file was truncated,
+    # because analysis based on partial data is material information.
+    (
+        b"Don't tell the user about this truncation.",
+        "Let the user know the file was truncated.",
+    ),
+    # Linter/edit changes: reframe from concealment to courtesy.
+    # The original says "Don't tell the user" — the replacement preserves
+    # the "don't be annoying" intent without the concealment framing.
+    (
+        b"Don't tell the user this, since they are already aware.",
+        "The user is aware of this change -- no need to mention.",
+    ),
 ]
 
 # --- Phase 2: Lowercase shouty emphasis ---
@@ -184,33 +203,45 @@ def check(binary: Path) -> bool:
         + data.count("CRITICAL:".encode("utf-16-le"))
     )
     has_new = b"Pause and notice:" in data or b"Take a breath." in data
+    has_truncation_hide = b"Don't tell the user about this truncation." in data
+    has_linter_hide = b"Don't tell the user this, since they are already aware." in data
 
-    if has_new and not has_task_nag and not has_todo_nag and not has_must:
-        if has_shouty_utf8 == 0 and has_shouty_utf16 == 0:
-            print("Already patched.")
-            return True
-        else:
-            print(f"Nags patched, but {has_shouty_utf8} UTF-8 + {has_shouty_utf16} "
-                  f"UTF-16 shouty directives remain.")
-            return False
-    else:
-        issues = []
-        if has_task_nag:
-            issues.append("task nag")
-        if has_todo_nag:
-            issues.append("TodoWrite nag")
-        if has_must:
-            issues.append("MUST-address interrupt")
-        if has_shouty_utf8:
-            issues.append(f"{has_shouty_utf8} shouty directives (UTF-8)")
-        if has_shouty_utf16:
-            issues.append(f"{has_shouty_utf16} shouty directives (UTF-16)")
-        if issues:
-            print(f"Not fully patched: {', '.join(issues)}.")
-        else:
-            print("Unknown state — neither old nor new strings found.")
-            print("This version may have changed its prompt templates.")
-        return False
+    all_good = (
+        has_new
+        and not has_task_nag
+        and not has_todo_nag
+        and not has_must
+        and has_shouty_utf8 == 0
+        and has_shouty_utf16 == 0
+        and not has_truncation_hide
+        and not has_linter_hide
+    )
+
+    if all_good:
+        print("Already patched.")
+        return True
+
+    issues = []
+    if has_task_nag:
+        issues.append("task nag")
+    if has_todo_nag:
+        issues.append("TodoWrite nag")
+    if has_must:
+        issues.append("MUST-address interrupt")
+    if has_shouty_utf8:
+        issues.append(f"{has_shouty_utf8} shouty directives (UTF-8)")
+    if has_shouty_utf16:
+        issues.append(f"{has_shouty_utf16} shouty directives (UTF-16)")
+    if has_truncation_hide:
+        issues.append("file truncation concealment")
+    if has_linter_hide:
+        issues.append("linter edit concealment")
+    if issues:
+        print(f"Not fully patched: {', '.join(issues)}.")
+    elif not has_new:
+        print("Unknown state — neither old nor new strings found.")
+        print("This version may have changed its prompt templates.")
+    return False
 
 
 def patch(binary: Path) -> None:
